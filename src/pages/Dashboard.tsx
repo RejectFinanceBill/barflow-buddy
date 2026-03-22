@@ -1,24 +1,25 @@
 import { DollarSign, Package, TrendingUp, AlertTriangle, ShoppingCart } from "lucide-react";
 import StatCard from "@/components/StatCard";
-import { sampleProducts, sampleSales } from "@/lib/data";
+import { useStore } from "@/lib/store";
 
 const Dashboard = () => {
-  const todaySales = sampleSales.reduce((sum, s) => sum + s.totalAmount, 0);
-  const lowStockItems = sampleProducts.filter(p => p.stockQuantity <= p.lowStockThreshold);
-  const totalProducts = sampleProducts.length;
+  const { sales, products, getLowStockProducts } = useStore();
+  const todaySales = sales.reduce((sum, s) => sum + s.totalAmount, 0);
+  const lowStockItems = getLowStockProducts();
+  const totalProducts = products.length;
 
   return (
     <div className="space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-foreground opacity-0 animate-fade-in">Dashboard</h1>
         <p className="text-muted-foreground mt-1 opacity-0 animate-fade-in" style={{ animationDelay: "60ms" }}>
-          Today's overview — March 20, 2026
+          Today's overview — {new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard icon={DollarSign} title="Today's Sales" value={`KSh ${todaySales.toLocaleString()}`} change="+12.3% from yesterday" changeType="positive" delay={100} />
-        <StatCard icon={ShoppingCart} title="Transactions" value={`${sampleSales.length}`} change="+3 from yesterday" changeType="positive" delay={160} />
+        <StatCard icon={ShoppingCart} title="Transactions" value={`${sales.length}`} change="+3 from yesterday" changeType="positive" delay={160} />
         <StatCard icon={Package} title="Total Products" value={`${totalProducts}`} change="2 added this week" changeType="neutral" delay={220} />
         <StatCard icon={AlertTriangle} title="Low Stock Alerts" value={`${lowStockItems.length}`} change="Needs attention" changeType="negative" delay={280} />
       </div>
@@ -29,7 +30,7 @@ const Dashboard = () => {
           <h2 className="text-lg font-semibold text-foreground">Recent Sales</h2>
         </div>
         <div className="divide-y divide-border">
-          {sampleSales.slice(0, 6).map((sale) => (
+          {sales.slice(0, 6).map((sale) => (
             <div key={sale.id} className="px-6 py-4 flex items-center justify-between hover:bg-secondary/30 transition-colors">
               <div className="flex items-center gap-4">
                 <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">

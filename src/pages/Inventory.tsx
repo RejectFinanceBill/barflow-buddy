@@ -1,16 +1,18 @@
 import { useState, useMemo } from "react";
 import { Search, Plus, Package, ArrowUpDown } from "lucide-react";
-import { sampleProducts, categories, type Category } from "@/lib/data";
+import { categories, type Category } from "@/lib/data";
+import { useStore } from "@/lib/store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 const Inventory = () => {
+  const { products } = useStore();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category | "All">("All");
   const [sortBy, setSortBy] = useState<"name" | "stock" | "price">("name");
 
   const filteredProducts = useMemo(() => {
-    return sampleProducts
+    return products
       .filter(p => {
         const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
         const matchesCategory = activeCategory === "All" || p.category === activeCategory;
@@ -21,14 +23,14 @@ const Inventory = () => {
         if (sortBy === "stock") return a.stockQuantity - b.stockQuantity;
         return b.sellingPrice - a.sellingPrice;
       });
-  }, [search, activeCategory, sortBy]);
+  }, [search, activeCategory, sortBy, products]);
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between opacity-0 animate-fade-in">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Inventory</h1>
-          <p className="text-muted-foreground mt-1 text-sm">{sampleProducts.length} products tracked</p>
+          <p className="text-muted-foreground mt-1 text-sm">{products.length} products tracked</p>
         </div>
         <Button className="bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all">
           <Plus className="w-4 h-4 mr-2" />
