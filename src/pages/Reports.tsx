@@ -1,29 +1,68 @@
 import { useMemo, useState } from "react";
-import { BarChart3, TrendingUp, DollarSign, ShoppingCart, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { BarChart3, TrendingUp, DollarSign, ShoppingCart, ArrowUpRight, ArrowDownRight, CalendarIcon, Filter, Download } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { format, isWithinInterval, startOfDay, endOfDay, subDays, startOfWeek, startOfMonth } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { categories, type Category } from "@/lib/data";
 
 const COLORS = ["hsl(40,96%,54%)", "hsl(142,71%,45%)", "hsl(199,89%,48%)", "hsl(0,72%,51%)", "hsl(280,65%,60%)"];
 
 const Reports = () => {
   const { sales, products } = useStore();
-  const [period, setPeriod] = useState<"today" | "week" | "month">("today");
+  const [period, setPeriod] = useState<"today" | "week" | "month" | "custom">("today");
+  const [paymentFilter, setPaymentFilter] = useState<"All" | "Cash" | "M-Pesa" | "Card">("All");
+  const [cashierFilter, setCashierFilter] = useState<string>("All");
+  const [categoryFilter, setCategoryFilter] = useState<Category | "All">("All");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
+
+  const cashiers = useMemo(() => {
+    const set = new Set(sales.map(s => s.cashier));
+    return Array.from(set);
+  }, [sales]);
+
+  const filteredSales = useMemo(() => {
+    const now = new Date();
+    return sales.filter(sale => {
+      const saleDate = new Date(sale.date);
+
+      // Period filter
+      if (period === "today" && saleDate < startOfDay(now)) return false;
+      if (period === "week" && saleDate < startOfWeek(now)) return false;
+      if (period === "month" && saleDate < startOfMonth(now)) return false;
+      if (period === "custom") {
+        if (dateFrom && saleDate < startOfDay(dateFrom)) return false;
+        if (dateTo && saleDate > endOfDay(dateTo)) return false;
+      }
+
+      // Payment filter
+      if (paymentFilter !== "All" && sale.paymentMethod !== paymentFilter) return false;
+
+      // Cashier filter
+      if (cashierFilter !== "All" && sale.cashier !== cashierFilter) return false;
+
+      return true;
+    });
+  }, [sales, period, paymentFilter, cashierFilter, dateFrom, dateTo]);
 
   const stats = useMemo(() => {
-    const totalRevenue = sales.reduce((s, sale) => s + sale.totalAmount, 0);
-    const totalTransactions = sales.length;
+    const totalRevenue = filteredSales.reduce((s, sale) => s + sale.totalAmount, 0);
+    const totalTransactions = filteredSales.length;
     const avgTransaction = totalTransactions > 0 ? totalRevenue / totalTransactions : 0;
 
-    // Payment method breakdown
-    const paymentBreakdown = sales.reduce((acc, sale) => {
+    const paymentBreakdown = filteredSales.reduce((acc, sale) => {
       acc[sale.paymentMethod] = (acc[sale.paymentMethod] || 0) + sale.totalAmount;
       return acc;
     }, {} as Record<string, number>);
 
     const paymentData = Object.entries(paymentBreakdown).map(([name, value]) => ({ name, value }));
 
-    // Hourly sales (simulated from sample data)
-    const hourlySales = sales.reduce((acc, sale) => {
+    const hourlySales = filteredSales.reduce((acc, sale) => {
       const hour = new Date(sale.date).getHours();
       const label = `${hour}:00`;
       const existing = acc.find((a) => a.hour === label);
@@ -36,18 +75,29 @@ const Reports = () => {
       return acc;
     }, [] as { hour: string; amount: number; count: number }[]);
 
-    // Top selling - derive from sale amounts per cashier for demo
     const topProducts = products
+      .filter(p => categoryFilter === "All" || p.category === categoryFilter)
       .map((p) => ({
         name: p.name,
-        sold: Math.max(0, 50 - p.stockQuantity), // estimate from stock depletion
+        sold: Math.max(0, 50 - p.stockQuantity),
         revenue: Math.max(0, 50 - p.stockQuantity) * p.sellingPrice,
       }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
 
     return { totalRevenue, totalTransactions, avgTransaction, paymentData, hourlySales, topProducts };
-  }, [sales, products]);
+  }, [filteredSales, products, categoryFilter]);
+
+  const clearFilters = () => {
+    setPeriod("today");
+    setPaymentFilter("All");
+    setCashierFilter("All");
+    setCategoryFilter("All");
+    setDateFrom(undefined);
+    setDateTo(undefined);
+  };
+
+  const hasActiveFilters = paymentFilter !== "All" || cashierFilter !== "All" || categoryFilter !== "All" || period === "custom";
 
   return (
     <div className="space-y-6">
@@ -57,7 +107,7 @@ const Reports = () => {
           <p className="text-muted-foreground mt-1 text-sm">Sales analytics and performance tracking</p>
         </div>
         <div className="flex gap-1 bg-secondary rounded-lg p-1">
-          {(["today", "week", "month"] as const).map((p) => (
+          {(["today", "week", "month", "custom"] as const).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
@@ -68,6 +118,81 @@ const Reports = () => {
               {p.charAt(0).toUpperCase() + p.slice(1)}
             </button>
           ))}
+        </div>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="glass-card rounded-xl p-4 opacity-0 animate-fade-in" style={{ animationDelay: "60ms" }}>
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-primary" />
+          <span className="text-sm font-semibold text-foreground">Filters</span>
+          {hasActiveFilters && (
+            <button onClick={clearFilters} className="ml-auto text-xs text-primary hover:underline">Clear all</button>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-3">
+          {/* Custom Date Range */}
+          {period === "custom" && (
+            <>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className={cn("w-[150px] justify-start text-left text-xs", !dateFrom && "text-muted-foreground")}>
+                    <CalendarIcon className="w-3 h-3 mr-1.5" />
+                    {dateFrom ? format(dateFrom, "MMM dd, yyyy") : "From date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className={cn("w-[150px] justify-start text-left text-xs", !dateTo && "text-muted-foreground")}>
+                    <CalendarIcon className="w-3 h-3 mr-1.5" />
+                    {dateTo ? format(dateTo, "MMM dd, yyyy") : "To date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={dateTo} onSelect={setDateTo} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+            </>
+          )}
+
+          {/* Payment Method */}
+          <Select value={paymentFilter} onValueChange={(v) => setPaymentFilter(v as typeof paymentFilter)}>
+            <SelectTrigger className="w-[140px] h-9 text-xs">
+              <SelectValue placeholder="Payment" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All Payments</SelectItem>
+              <SelectItem value="Cash">Cash</SelectItem>
+              <SelectItem value="M-Pesa">M-Pesa</SelectItem>
+              <SelectItem value="Card">Card</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Cashier */}
+          <Select value={cashierFilter} onValueChange={setCashierFilter}>
+            <SelectTrigger className="w-[140px] h-9 text-xs">
+              <SelectValue placeholder="Cashier" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All Cashiers</SelectItem>
+              {cashiers.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          {/* Category */}
+          <Select value={categoryFilter} onValueChange={(v) => setCategoryFilter(v as Category | "All")}>
+            <SelectTrigger className="w-[140px] h-9 text-xs">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="All">All Categories</SelectItem>
+              {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -118,7 +243,6 @@ const Reports = () => {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Hourly Sales Chart */}
         <div className="lg:col-span-2 glass-card rounded-xl p-5 opacity-0 animate-fade-in" style={{ animationDelay: "200ms" }}>
           <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-primary" />
@@ -140,7 +264,6 @@ const Reports = () => {
           </div>
         </div>
 
-        {/* Payment Methods Pie */}
         <div className="glass-card rounded-xl p-5 opacity-0 animate-fade-in" style={{ animationDelay: "280ms" }}>
           <h3 className="text-sm font-semibold text-foreground mb-4">Payment Methods</h3>
           <div className="h-48">
