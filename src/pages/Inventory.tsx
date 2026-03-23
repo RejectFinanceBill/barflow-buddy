@@ -1,15 +1,53 @@
 import { useState, useMemo } from "react";
 import { Search, Plus, Package, ArrowUpDown } from "lucide-react";
-import { categories, type Category } from "@/lib/data";
+import { categories, type Category, type Product } from "@/lib/data";
 import { useStore } from "@/lib/store";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
 
 const Inventory = () => {
-  const { products } = useStore();
+  const { products, addProduct } = useStore();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category | "All">("All");
   const [sortBy, setSortBy] = useState<"name" | "stock" | "price">("name");
+  const [dialogOpen, setDialogOpen] = useState(false);
+
+  const [form, setForm] = useState({
+    name: "",
+    category: "" as Category | "",
+    buyingPrice: "",
+    sellingPrice: "",
+    stockQuantity: "",
+    lowStockThreshold: "",
+    unit: "",
+  });
+
+  const resetForm = () => setForm({ name: "", category: "", buyingPrice: "", sellingPrice: "", stockQuantity: "", lowStockThreshold: "", unit: "" });
+
+  const handleSubmit = () => {
+    if (!form.name || !form.category || !form.buyingPrice || !form.sellingPrice || !form.stockQuantity || !form.unit) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+    const newProduct: Product = {
+      id: crypto.randomUUID(),
+      name: form.name,
+      category: form.category as Category,
+      buyingPrice: Number(form.buyingPrice),
+      sellingPrice: Number(form.sellingPrice),
+      stockQuantity: Number(form.stockQuantity),
+      lowStockThreshold: Number(form.lowStockThreshold) || 5,
+      unit: form.unit,
+    };
+    addProduct(newProduct);
+    toast.success(`${newProduct.name} added to inventory`);
+    resetForm();
+    setDialogOpen(false);
+  };
 
   const filteredProducts = useMemo(() => {
     return products
@@ -32,7 +70,7 @@ const Inventory = () => {
           <h1 className="text-2xl font-bold text-foreground">Inventory</h1>
           <p className="text-muted-foreground mt-1 text-sm">{products.length} products tracked</p>
         </div>
-        <Button className="bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.97] transition-all">
+        <Button onClick={() => setDialogOpen(true)} className="active:scale-[0.97] transition-all">
           <Plus className="w-4 h-4 mr-2" />
           Add Product
         </Button>
@@ -110,6 +148,59 @@ const Inventory = () => {
           </tbody>
         </table>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add New Product</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Product Name *</Label>
+              <Input id="name" placeholder="e.g. Tusker Lager" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Category *</Label>
+                <Select value={form.category} onValueChange={v => setForm(f => ({ ...f, category: v as Category }))}>
+                  <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                  <SelectContent>
+                    {categories.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="unit">Unit *</Label>
+                <Input id="unit" placeholder="e.g. bottle, shot" value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="buyPrice">Buy Price (KSh) *</Label>
+                <Input id="buyPrice" type="number" placeholder="0" value={form.buyingPrice} onChange={e => setForm(f => ({ ...f, buyingPrice: e.target.value }))} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="sellPrice">Sell Price (KSh) *</Label>
+                <Input id="sellPrice" type="number" placeholder="0" value={form.sellingPrice} onChange={e => setForm(f => ({ ...f, sellingPrice: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="stock">Stock Quantity *</Label>
+                <Input id="stock" type="number" placeholder="0" value={form.stockQuantity} onChange={e => setForm(f => ({ ...f, stockQuantity: e.target.value }))} />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lowStock">Low Stock Alert</Label>
+                <Input id="lowStock" type="number" placeholder="5" value={form.lowStockThreshold} onChange={e => setForm(f => ({ ...f, lowStockThreshold: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSubmit}>Add Product</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

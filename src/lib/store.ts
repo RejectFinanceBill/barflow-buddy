@@ -40,6 +40,10 @@ export function useStore() {
       });
       notify();
     },
+    addProduct: (product: Product) => {
+      _products = [product, ..._products];
+      notify();
+    },
     updateProduct: (id: string, updates: Partial<Product>) => {
       _products = _products.map((p) => (p.id === id ? { ...p, ...updates } : p));
       notify();
